@@ -1,0 +1,15 @@
+
+  Id     Duration CommandLine
+  --     -------- -----------
+   1        0.210 cmake -S . -B .\build\
+   2       16.369 cmake -S . -B .\build\
+   3       16.457 cmake -S . -B .\build\
+   4        3.008 clc
+   5        0.035 clear
+   6       16.395 cmake -S . -B .\build\
+   7        6.596 cmake --build .\build\ --config Release
+   8        0.058 history
+   9        0.029 history -CommandLine
+  10        0.034 history --CommandLine
+  11        0.026 history -commandline
+
