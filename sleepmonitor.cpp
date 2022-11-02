@@ -8,7 +8,7 @@
 #include <sstream>
 #include <string>
 #include "SpinVideo.h"
-#include <opencv2/videoio.hpp>
+
 
 #define FRAMERATE 10
 #define BITRATE 10000000
@@ -17,8 +17,6 @@
 #define WIDTH 640
 #define PARTS 1
 
-HANDLE hConsole = GetStdHandle(STD_OUTPUT_HANDLE);
-
 using namespace Spinnaker;
 using namespace Spinnaker::GenApi;
 using namespace Spinnaker::GenICam;
@@ -26,9 +24,6 @@ using namespace Spinnaker::Video;
 using namespace std;
 using namespace cv;
 
-// This function prints the device information of the camera from the transport
-// layer; please see NodeMapInfo example for more in-depth comments on printing
-// device information from the nodemap.
 int PrintDeviceInfo(INodeMap& nodeMap)
 {
     int result = 0;
@@ -67,12 +62,9 @@ int PrintDeviceInfo(INodeMap& nodeMap)
     return result;
 }
 
-// This function prepares, saves, and cleans up an video from a vector of images.
 int ConfigureCamera(INodeMap& nodeMap, INodeMap& nodeMapTLDevice)
 {
     int result = 0;
-
-    SetConsoleTextAttribute(hConsole, 9);
 
     try
     {
@@ -107,8 +99,6 @@ int ConfigureCamera(INodeMap& nodeMap, INodeMap& nodeMapTLDevice)
         result = -1;
     }
 
-    SetConsoleTextAttribute(hConsole, 15);
-
     return result;
 }
 
@@ -117,21 +107,25 @@ int AcquireImages(CameraPtr pCam, INodeMap& nodeMap)
 {
     int result = 0;
 
-    SetConsoleTextAttribute(hConsole, 11);
-
     cout << endl << endl << "\t*** IMAGE ACQUISITION ***" << endl;
 
     try
     {
-        // Calculate required number of frames for video
-        const unsigned int numImages = (FRAMERATE * RECORD_TIME);
+        int recordTime = 60;
+        int recordParts = 1;
+        cout << "Recording time (seconds): ";
+        cin >> recordTime;
+        cout << endl << "Number of video files: ";
+        cin >> recordParts; 
+
+
+
+        // Calculate required number of frames for 1 video file
+        const unsigned int numImages = ((FRAMERATE * recordTime)/recordParts) + 24;
 
         // Begin acquiring images
         pCam->BeginAcquisition();
         cout << "Acquisition started..." << endl << endl;
-
-        SetConsoleTextAttribute(hConsole, 15);
-
 
         // *** NOTES ***
         // By default, if no specific color processing algorithm is set, the image
@@ -140,33 +134,30 @@ int AcquireImages(CameraPtr pCam, INodeMap& nodeMap)
         processor.SetColorProcessing(HQ_LINEAR);
 
         SpinVideo video;
-        const unsigned int k_videoFileSize_MB = 4096;
-        video.SetMaximumFileSize(k_videoFileSize_MB);
+        //const unsigned int k_videoFileSize_MB = 4096;
+        //video.SetMaximumFileSize(k_videoFileSize_MB);
 
         Video::H264Option option;
-
         option.frameRate = FRAMERATE;
         option.bitrate = BITRATE;
         option.height = HEIGHT;
         option.width = WIDTH;
 
-        for (int part = 1; part <= PARTS; part++)
+        for (int part = 1; part <= recordParts; part++)
         {
             string videoFilename = "Video_" + to_string(part) + "_" + to_string(time(0));
             video.Open(videoFilename.c_str(), option);
 
-            vector<ImagePtr> images;
 
-            cout << "Appending first 24 frames to MP4 file..." << endl;
-            SetConsoleTextAttribute(hConsole, 8);
-            for (int frame = 0; frame < 24; frame++)
-            {
-                ImagePtr pResultImage = pCam->GetNextImage(1000);
-                Mat cvimg = cv::Mat(480, 640, CV_16UC1, pResultImage->GetData(), pResultImage->GetStride());
-                cvimg = cvimg - 24000;
-                cvimg = cvimg * 50;
-                video.Append(processor.Convert(pResultImage, PixelFormat_Mono8));
-            }
+            //cout << "Appending first 24 frames to MP4 file..." << endl;
+            //for (int frame = 0; frame < 24; frame++)
+            //{
+            //    ImagePtr pResultImage = pCam->GetNextImage(1000);
+            //    Mat cvimg = cv::Mat(480, 640, CV_16UC1, pResultImage->GetData(), pResultImage->GetStride());
+            //    cvimg = cvimg - 24000;
+            //    cvimg = cvimg * 50;
+            //    video.Append(processor.Convert(pResultImage, PixelFormat_Mono8));
+            //}
 
             // *** IMPORTAN NOTE TO SELF ***
             // The first 24 frames in the MP4 file won't be buffered
@@ -180,13 +171,13 @@ int AcquireImages(CameraPtr pCam, INodeMap& nodeMap)
 
                     if (pResultImage->IsIncomplete())
                     {
-                        SetConsoleTextAttribute(hConsole, 12);
+                        //SetConsoleTextAttribute(hConsole, 12);
                         cout << "Image "<< imageCnt << " is incomplete with image status " << pResultImage->GetImageStatus() << "..." << endl
                             << endl;
                     }
                     else
                     {
-                        SetConsoleTextAttribute(hConsole, 10);
+                        //SetConsoleTextAttribute(hConsole, 10);
 
                         cout << "------------------------" << endl;
                         cout << "Grabbed image " << imageCnt << "/" << numImages << endl;
@@ -200,14 +191,9 @@ int AcquireImages(CameraPtr pCam, INodeMap& nodeMap)
                         cout << "Appended image " << imageCnt << "/" << numImages << " to part:" << part << endl;
                         cout << "------------------------" << endl;
 
-
+                        // Release image
+                        pResultImage->Release();
                     }
-                    images.push_back(processor.Convert(pResultImage, PixelFormat_Mono8));
-
-                    //video.Append(processor.Convert(pResultImage, PixelFormat_Mono8));
-
-                    // Release image
-                    pResultImage->Release();
                 }
 
                 catch (Spinnaker::Exception& e)
@@ -216,17 +202,8 @@ int AcquireImages(CameraPtr pCam, INodeMap& nodeMap)
                     result = -1;
                 }
             }
-
-            //for (unsigned int imageCnt = 0; imageCnt < images.size(); imageCnt++)
-            //{
-            //    video.Append(images[imageCnt]);
-            //
-            //    cout << "\tAppended image " << imageCnt << "..." << endl;
-            //}
-
             video.Close();
             cout << endl << "Video saved at " << videoFilename << ".avi" << endl;
-            //video.release();
         }
         // End acquisition
         pCam->EndAcquisition();
@@ -240,8 +217,6 @@ int AcquireImages(CameraPtr pCam, INodeMap& nodeMap)
     return result;
 }
 
-// This function acts as the body of the example; please see NodeMapInfo example
-// for more in-depth comments on setting up cameras.
 int RunSingleCamera(CameraPtr pCam)
 {
     int result = 0;
@@ -260,6 +235,7 @@ int RunSingleCamera(CameraPtr pCam)
         // Retrieve GenICam nodemap
         INodeMap& nodeMap = pCam->GetNodeMap();
 
+        // Configure camera settings (fps, acquisition mode, etc.)
         result = result | ConfigureCamera(nodeMap, nodeMapTLDevice);
 
         err = AcquireImages(pCam, nodeMap);
@@ -280,8 +256,6 @@ int RunSingleCamera(CameraPtr pCam)
     return result;
 }
 
-// Example entry point; please see Enumeration example for more in-depth
-// comments on preparing and cleaning up the system.
 int main(int /*argc*/, char** /*argv*/)
 {
     int result = 0;
