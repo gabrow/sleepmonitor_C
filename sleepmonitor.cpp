@@ -10,9 +10,9 @@
 #include "SpinVideo.h"
 #include <opencv2/videoio.hpp>
 
-#define FRAMERATE 1
+#define FRAMERATE 10
 #define BITRATE 10000000
-#define RECORD_TIME 1      //IN SECONDS
+#define RECORD_TIME 30      //IN SECONDS
 #define HEIGHT 480
 #define WIDTH 640
 #define PARTS 1
@@ -68,7 +68,7 @@ int PrintDeviceInfo(INodeMap& nodeMap)
 }
 
 // This function prepares, saves, and cleans up an video from a vector of images.
-int InitializeCamera(INodeMap& nodeMap, INodeMap& nodeMapTLDevice)
+int ConfigureCamera(INodeMap& nodeMap, INodeMap& nodeMapTLDevice)
 {
     int result = 0;
 
@@ -98,7 +98,7 @@ int InitializeCamera(INodeMap& nodeMap, INodeMap& nodeMapTLDevice)
         cout << "----- Acquisition mode set to continuous... -----" << endl;
 
         CFloatPtr ptrFramerate = nodeMap.GetNode("AcquisitionFrameRate");
-        ptrFramerate->SetValue(10.0);
+        ptrFramerate->SetValue(FRAMERATE);
         cout << "----- Acquisition framerate set to 10... -----" << endl;
     }
     catch (Spinnaker::Exception& e)
@@ -124,7 +124,7 @@ int AcquireImages(CameraPtr pCam, INodeMap& nodeMap)
     try
     {
         // Calculate required number of frames for video
-        const unsigned int numImages = (FRAMERATE * RECORD_TIME) + 24;
+        const unsigned int numImages = (FRAMERATE * RECORD_TIME);
 
         // Begin acquiring images
         pCam->BeginAcquisition();
@@ -150,17 +150,27 @@ int AcquireImages(CameraPtr pCam, INodeMap& nodeMap)
         option.height = HEIGHT;
         option.width = WIDTH;
 
-        for (int part = 0; part < PARTS; part++)
+        for (int part = 1; part <= PARTS; part++)
         {
-            string videoFilename = "Video_" + to_string(part+1) + "_" + to_string(time(0));
+            string videoFilename = "Video_" + to_string(part) + "_" + to_string(time(0));
             video.Open(videoFilename.c_str(), option);
 
             vector<ImagePtr> images;
 
+            cout << "Appending first 24 frames to MP4 file..." << endl;
+            SetConsoleTextAttribute(hConsole, 8);
+            for (int frame = 0; frame < 24; frame++)
+            {
+                ImagePtr pResultImage = pCam->GetNextImage(1000);
+                Mat cvimg = cv::Mat(480, 640, CV_16UC1, pResultImage->GetData(), pResultImage->GetStride());
+                cvimg = cvimg - 24000;
+                cvimg = cvimg * 50;
+                video.Append(processor.Convert(pResultImage, PixelFormat_Mono8));
+            }
 
             // *** IMPORTAN NOTE TO SELF ***
             // The first 24 frames in the MP4 file won't be buffered
-            for (int imageCnt = 0; imageCnt < numImages; imageCnt++)
+            for (int imageCnt = 1; imageCnt <= numImages; imageCnt++)
             {
                 try
                 {
@@ -179,7 +189,7 @@ int AcquireImages(CameraPtr pCam, INodeMap& nodeMap)
                         SetConsoleTextAttribute(hConsole, 10);
 
                         cout << "------------------------" << endl;
-                        cout << "Grabbed image " << imageCnt + 1 << "/" << numImages << endl;
+                        cout << "Grabbed image " << imageCnt << "/" << numImages << endl;
 
                         Mat cvimg = cv::Mat(480, 640, CV_16UC1, pResultImage->GetData(), pResultImage->GetStride());
                         cvimg = cvimg - 24000;
@@ -187,7 +197,7 @@ int AcquireImages(CameraPtr pCam, INodeMap& nodeMap)
 
                         // Deep copy image into mp4 file
                         video.Append(processor.Convert(pResultImage, PixelFormat_Mono8));
-                        cout << "Appended image " << imageCnt + 1 << "/" << numImages << " to part:" << part + 1 << endl;
+                        cout << "Appended image " << imageCnt << "/" << numImages << " to part:" << part << endl;
                         cout << "------------------------" << endl;
 
 
@@ -250,7 +260,7 @@ int RunSingleCamera(CameraPtr pCam)
         // Retrieve GenICam nodemap
         INodeMap& nodeMap = pCam->GetNodeMap();
 
-        result = result | InitializeCamera(nodeMap, nodeMapTLDevice);
+        result = result | ConfigureCamera(nodeMap, nodeMapTLDevice);
 
         err = AcquireImages(pCam, nodeMap);
         if (err < 0)
