@@ -4,10 +4,11 @@
 #include <opencv2/core/utils/logger.hpp>
 #include "Spinnaker.h"
 #include "SpinGenApi/SpinnakerGenApi.h"
+#include "SpinVideo.h"
 #include <iostream>
 #include <sstream>
 #include <string>
-#include "SpinVideo.h"
+#include <chrono>
 
 
 #define FRAMERATE 10
@@ -111,17 +112,17 @@ int AcquireImages(CameraPtr pCam, INodeMap& nodeMap)
 
     try
     {
-        int recordTime = 60;
+        int recordTime = 1;
         int recordParts = 1;
-        cout << "Recording time (seconds): ";
-        cin >> recordTime;
-        cout << endl << "Number of video files: ";
-        cin >> recordParts; 
+        //cout << "Recording time (seconds): ";
+        //cin >> recordTime;
+        //cout << endl << "Number of video files: ";
+        //cin >> recordParts; 
 
 
 
         // Calculate required number of frames for 1 video file
-        const unsigned int numImages = ((FRAMERATE * recordTime)/recordParts) + 24;
+        const int numImages = ((FRAMERATE * recordTime) / recordParts) +24;
 
         // Begin acquiring images
         pCam->BeginAcquisition();
@@ -143,6 +144,9 @@ int AcquireImages(CameraPtr pCam, INodeMap& nodeMap)
         option.height = HEIGHT;
         option.width = WIDTH;
 
+        chrono::steady_clock::time_point begin = std::chrono::steady_clock::now();
+        std::chrono::steady_clock::time_point elapsed;
+
         for (int part = 1; part <= recordParts; part++)
         {
             string videoFilename = "Video_" + to_string(part) + "_" + to_string(time(0));
@@ -161,7 +165,7 @@ int AcquireImages(CameraPtr pCam, INodeMap& nodeMap)
 
             // *** IMPORTAN NOTE TO SELF ***
             // The first 24 frames in the MP4 file won't be buffered
-            for (int imageCnt = 1; imageCnt <= numImages; imageCnt++)
+            for (int imageCnt = 1; imageCnt < numImages; imageCnt++)
             {
                 try
                 {
@@ -183,16 +187,45 @@ int AcquireImages(CameraPtr pCam, INodeMap& nodeMap)
                         cout << "Grabbed image " << imageCnt << "/" << numImages << endl;
 
                         Mat cvimg = cv::Mat(480, 640, CV_16UC1, pResultImage->GetData(), pResultImage->GetStride());
+
+                        //std::string raw_filename = to_string(imageCnt) + "_raw.raw";
+                        //pResultImage->Save(raw_filename.c_str());
+
+                        //String img_filename = to_string(imageCnt) + "_frame.csv";
+                        //FileStorage file(img_filename, FileStorage::WRITE);
+                        //file << "image" << cvimg;
+
                         cvimg = cvimg - 24000;
                         cvimg = cvimg * 50;
+
+                        //imshow("16bit", cvimg); waitKey(0);
+                        //cvimg.convertTo(cvimg, CV_8UC1);
+                        //cvimg.at<Vec3b>(1, 1)[0] = 0;
+                        //Mat rgb;
+                        //cvimg.convertTo(rgb, CV_8UC3);
+                        //for (int i = 0; i < 400; i++)
+                        //{
+                        //    for (int j = 0; j < 200; j++)
+                        //    {
+                        //        rgb.at<Vec3b>(i, j)[0] *= 2;
+                        //        rgb.at<Vec3b>(i, j)[1] *= 3;
+                        //        rgb.at<Vec3b>(i, j)[2] = 0;
+                        //    }
+                        //}
+                        //imshow("8bitrgb", rgb); waitKey(0);
 
                         // Deep copy image into mp4 file
                         video.Append(processor.Convert(pResultImage, PixelFormat_Mono8));
                         cout << "Appended image " << imageCnt << "/" << numImages << " to part:" << part << endl;
-                        cout << "------------------------" << endl;
 
                         // Release image
                         pResultImage->Release();
+
+                        elapsed = std::chrono::steady_clock::now();
+                        std::cout << "Recording time elapsed: "
+                                  << std::chrono::duration_cast<std::chrono::seconds>(elapsed - begin).count()
+                                  << "s" << std::endl;
+                        cout << "------------------------" << endl;
                     }
                 }
 
