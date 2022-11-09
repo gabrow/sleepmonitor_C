@@ -25,6 +25,8 @@ using namespace Spinnaker::Video;
 using namespace std;
 using namespace cv;
 
+int exp_part = 0;
+
 int PrintDeviceInfo(INodeMap& nodeMap)
 {
     int result = 0;
@@ -112,7 +114,7 @@ int AcquireImages(CameraPtr pCam, INodeMap& nodeMap)
 
     try
     {
-        int recordTime = 1;
+        int recordTime = 3600;
         int recordParts = 1;
         //cout << "Recording time (seconds): ";
         //cin >> recordTime;
@@ -149,7 +151,7 @@ int AcquireImages(CameraPtr pCam, INodeMap& nodeMap)
 
         for (int part = 1; part <= recordParts; part++)
         {
-            string videoFilename = "Video_" + to_string(part) + "_" + to_string(time(0));
+            string videoFilename = "Video_" + to_string(exp_part) + "_" + to_string(time(0));
             video.Open(videoFilename.c_str(), option);
 
 
@@ -195,8 +197,11 @@ int AcquireImages(CameraPtr pCam, INodeMap& nodeMap)
                         //FileStorage file(img_filename, FileStorage::WRITE);
                         //file << "image" << cvimg;
 
-                        cvimg = cvimg - 24000;
+                        cvimg = cvimg - 24200;
                         cvimg = cvimg * 50;
+
+                        //imshow("preview", cvimg);
+                        //waitKey(1);
 
                         //imshow("16bit", cvimg); waitKey(0);
                         //cvimg.convertTo(cvimg, CV_8UC1);
@@ -335,7 +340,10 @@ int main(int /*argc*/, char** /*argv*/)
     {
         cout << endl << "Running example for camera " << i << "..." << endl;
 
-        result = result | RunSingleCamera(camList.GetByIndex(i));
+        for (exp_part = 0; exp_part < 10; exp_part++)
+        {
+            result = result | RunSingleCamera(camList.GetByIndex(i));
+        }
 
         cout << "Camera " << i << " example complete..." << endl << endl;
     }
